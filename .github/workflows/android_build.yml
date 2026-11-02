@@ -1,0 +1,101 @@
+name: Build Bangalore Collective AAB
+
+# Manual only in this repo for now: it still writes Supabase settings and needs the Android signing
+# secrets, which this repo does not have yet. Update it for the VPS site before go-live.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Create Production .env File
+        run: |
+          echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" >> .env
+          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env
+          echo "NEXT_PUBLIC_RAZORPAY_KEY_ID=${{ secrets.NEXT_PUBLIC_RAZORPAY_KEY_ID }}" >> .env
+          echo "RAZORPAY_KEY_SECRET=${{ secrets.RAZORPAY_KEY_SECRET }}" >> .env
+          echo "NEXT_PUBLIC_RAZORPAY_KEY=${{ secrets.NEXT_PUBLIC_RAZORPAY_KEY }}" >> .env
+          echo "EMAIL_USER=${{ secrets.EMAIL_USER }}" >> .env
+          echo "EMAIL_PASS=${{ secrets.EMAIL_PASS }}" >> .env
+
+      - name: Build Web Application (Static Export)
+        run: npm run build
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create Android Assets Directory
+        run: mkdir -p android/app/src/main/assets
+
+      - name: Capacitor Sync
+        run: npx cap sync android
+
+      - name: Check Keystore Secret Integrity
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_CONTENT }}
+        run: |
+          python3 -c "
+          import os, sys
+          s = os.environ.get('KEYSTORE_BASE64', '').strip()
+          length = len(s)
+          print(f'KEYSTORE_BASE64 length: {length}')
+          if length == 0:
+              print('::error::ANDROID_KEYSTORE_CONTENT secret is empty or not set.')
+              sys.exit(1)
+          if length % 4 != 0:
+              print(f'::error::Base64 length {length} is not a multiple of 4 -- the secret is truncated or corrupted. Re-generate it with: base64 -w0 keystore.jks and re-upload with gh secret set, not by pasting into the web UI.')
+              sys.exit(1)
+          print('Length check passed.')
+          "
+
+      - name: Decode Production Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_CONTENT }}
+        run: |
+          python3 -c "import os, base64; open('android/bangalorecollective-release.jks', 'wb').write(base64.b64decode(os.environ['KEYSTORE_BASE64'].strip()))"
+
+      - name: Create keystore.properties
+        run: |
+          echo "storeFile=bangalorecollective-release.jks" >> android/keystore.properties
+          echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> android/keystore.properties
+          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> android/keystore.properties
+          echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> android/keystore.properties
+
+      - name: Build Release AAB and APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease assembleRelease --stacktrace
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: bangalorecollective-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: bangalorecollective-apk
+          path: android/app/build/outputs/apk/release/app-release.apk

@@ -1,0 +1,445 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
+import {
+  Trash2,
+  ShoppingBag,
+  ShieldCheck,
+  Plus,
+  Minus,
+  ArrowRight,
+  Loader2,
+  Sparkles,
+  AlertTriangle
+} from "lucide-react";
+import toast from "react-hot-toast";
+import supabase from "@/lib/supabase";
+
+// NEW
+interface CartItem {
+  id: string;
+  productId: number;
+  name: string;
+  variationId: number | null;
+  variationName: string;
+  price: number;
+  originalPrice: number;
+  quantity: number;
+  image: string;
+  stock: number;
+  isSaleItem: boolean;
+  carryBagBox: boolean;
+  bagBoxPrice: number;
+  carryBagBoxAvailable: boolean; // whether THIS variation even offers the add-on
+}
+export default function CartPage() {
+  const router = useRouter();
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data } = await supabase.auth.getSession();
+      setUserId(data.session?.user?.id || null);
+    };
+    fetchUser();
+  }, []);
+
+  const fetchCart = useCallback(async () => {
+    if (!userId) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("cart")
+      .select(`
+    id, product_id, variation_id, quantity, carry_bag_box, bag_box_price,
+    products ( id, name, product_images ( image_url ), lifestyle_tag:attributes!products_lifestyle_tag_id_fkey ( name ) )
+  `)
+      .eq("user_id", userId);
+
+    if (error) {
+      toast.error("Error loading cart");
+      setLoading(false);
+      return;
+    }
+
+    const formattedCart = await Promise.all((data || []).map(async (item: any) => {
+      let activePrice = 0;
+      let basePrice = 0;
+      let stock = 0;
+      let varName = "";
+
+      // NEW
+      const { data: varData } = await supabase
+        .from("product_variations")
+        .select(`price, sale_price, stock, carry_bag_box, color:attributes!product_variations_color_id_fkey(name), size:attributes!product_variations_size_id_fkey(name)`)
+        .eq("id", item.variation_id || 0)
+        .maybeSingle();
+      // NEW
+      let carryBagBoxAvailable = false;
+      if (varData) {
+        activePrice = varData.sale_price ? Number(varData.sale_price) : Number(varData.price);
+        basePrice = Number(varData.price);
+        stock = varData.stock;
+        carryBagBoxAvailable = !!varData.carry_bag_box;
+
+        // Helper to extract and filter out "default" labels
+        const getCleanName = (val: any) => {
+          const name = val ? (Array.isArray(val) ? val[0]?.name : val.name) : "";
+          return (name && name.toLowerCase() !== 'default') ? name : "";
+        };
+
+        const color = getCleanName(varData.color);
+        const size = getCleanName(varData.size);
+
+        // Only join items that exist
+        const parts = [color, size].filter(Boolean);
+        varName = parts.join(" - ");
+      }
+
+      const rawTag = item.products?.lifestyle_tag;
+      const tagName = Array.isArray(rawTag) ? rawTag[0]?.name : rawTag?.name;
+      const isSaleItem = !!(tagName && tagName.toLowerCase().includes("sale"));
+
+      // NEW
+      return {
+        id: item.id,
+        productId: item.product_id,
+        variationId: item.variation_id,
+        variationName: varName, // Empty string if no valid attributes
+        quantity: item.quantity,
+        name: item.products?.name || "Unknown Product",
+        price: activePrice,
+        originalPrice: basePrice,
+        stock: stock,
+        image: item.products?.product_images?.[0]?.image_url || "/placeholder.png",
+        isSaleItem,
+        carryBagBox: !!item.carry_bag_box,
+        bagBoxPrice: item.bag_box_price ? Number(item.bag_box_price) : 500,
+        carryBagBoxAvailable,
+      };
+    }));
+
+    setCart(formattedCart);
+    setLoading(false);
+  }, [userId]);
+
+  useEffect(() => { fetchCart(); }, [fetchCart]);
+
+  const updateQuantity = async (item: CartItem, newQuantity: number) => {
+    if (newQuantity < 1) return;
+
+    // GUARD: Block manual variations exceeding physical quantities
+    if (newQuantity > item.stock) {
+      toast.error(`Only ${item.stock} pieces available in stock.`);
+      return;
+    }
+
+    setCart(prev => prev.map(c => c.id === item.id ? { ...c, quantity: newQuantity } : c));
+    await supabase.from("cart").update({ quantity: newQuantity }).eq("id", item.id);
+    window.dispatchEvent(new Event("cartUpdated"));
+  };
+  const toggleBagBox = async (item: CartItem) => {
+    const next = !item.carryBagBox;
+    setCart(prev => prev.map(c => c.id === item.id ? { ...c, carryBagBox: next } : c));
+    await supabase.from("cart").update({ carry_bag_box: next }).eq("id", item.id);
+    window.dispatchEvent(new Event("cartUpdated"));
+  };
+  const removeFromCart = async (item: CartItem) => {
+    await supabase.from("cart").delete().eq("id", item.id);
+    setCart(prev => prev.filter(c => c.id !== item.id));
+    toast.success("Removed from bag");
+    window.dispatchEvent(new Event("cartUpdated"));
+  };
+
+  const subtotal = cart.reduce(
+    (acc, item) => acc + (item.price * item.quantity) + (item.carryBagBox ? item.bagBoxPrice : 0),
+    0
+  );
+  const shipping = subtotal < 1000 && subtotal > 0 ? 100 : 0;
+  const total = subtotal + shipping;
+
+  const handleProceedToCheckout = () => {
+    if (cart.length === 0) return;
+
+    // GUARD: Check if any items currently in the cart exceed individual stocks before allowing navigation
+    const hasInvalidStockItem = cart.some(item => item.quantity > item.stock || item.stock <= 0);
+    if (hasInvalidStockItem) {
+      toast.error("Please adjust quantities for items marked out-of-stock or exceeding availability.");
+      return;
+    }
+
+    localStorage.setItem("active_checkout", JSON.stringify({ items: cart, subtotal, gst: 0, shipping, total }));
+    router.push("/userinterface/checkout");
+  };
+
+  if (loading) return (
+    <div className="h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-black transition-colors duration-300">
+      <Loader2 className="animate-spin text-brand-gold" size={24} />
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-black pt-20 sm:pt-24 pb-28 lg:pb-24 px-4 sm:px-6 text-slate-900 dark:text-white selection:bg-brand-gold/20 transition-colors duration-300">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-5%] right-[-5%] w-[260px] h-[260px] sm:w-[400px] sm:h-[400px] bg-brand-gold/5 rounded-full blur-[100px]" />
+        <div className="absolute bottom-[10%] left-[-5%] w-[320px] h-[320px] sm:w-[500px] sm:h-[500px] bg-blue-50 dark:bg-[#111]/50 rounded-full blur-[120px] transition-colors duration-300" />
+      </div>
+
+      <div className="max-w-6xl mx-auto relative z-10">
+        <header className="mb-6 sm:mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/40 dark:bg-[#111]/40 backdrop-blur-md border border-white/80 dark:border-[#333] rounded-full shadow-sm mb-3 sm:mb-4 transition-colors duration-300">
+            <Sparkles size={10} className="text-brand-gold" />
+            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-gray-300">
+              Shopping Bag / {cart.length} Units
+            </span>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-950 dark:text-white uppercase transition-colors duration-300">
+            Checkou<span className="text-brand-gold">t</span>
+          </h1>
+        </header>
+
+        {cart.length === 0 ? (
+          <EmptyCart />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+            <div className="lg:col-span-7 space-y-3 sm:space-y-4">
+              {cart.map((item) => (
+                <CartItemRow
+                  key={item.id}
+                  item={item}
+                  updateQuantity={updateQuantity}
+                  removeFromCart={removeFromCart}
+                  toggleBagBox={toggleBagBox}
+                />
+              ))}
+            </div>
+
+            {/* Order Summary — inline card, static on mobile, sticky sidebar on desktop */}
+            <div className="lg:col-span-5 lg:sticky lg:top-24">
+              <div className="p-6 sm:p-8 bg-white/60 dark:bg-[#111]/60 backdrop-blur-2xl rounded-[2rem] sm:rounded-[2.5rem] border border-white dark:border-[#333] shadow-2xl shadow-slate-200/50 dark:shadow-black/50 transition-colors duration-300">
+                <h2 className="text-base sm:text-lg font-black mb-5 sm:mb-6 uppercase tracking-tight text-slate-900 dark:text-white transition-colors duration-300">Order Summary</h2>
+
+                <div className="space-y-3 mb-6 sm:mb-8">
+                  <SummaryRow label="Subtotal" value={subtotal} />
+
+                  <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+                    <span className="text-slate-400">Shipping</span>
+                    <span className={shipping === 0 && subtotal >= 1000 ? "text-brand-gold" : "text-slate-900 dark:text-white"}>
+                      {shipping === 0 && subtotal >= 1000 ? "Complimentary" : `₹${shipping}`}
+                    </span>
+                  </div>
+
+                  {subtotal > 0 && subtotal < 1000 && (
+                    <p className="text-[8px] text-brand-gold font-bold uppercase tracking-tighter">
+                      Add ₹{1000 - subtotal} more for Free Shipping
+                    </p>
+                  )}
+
+                  <div className="h-[1px] bg-slate-100 dark:bg-[#333] w-full my-4 transition-colors duration-300" />
+
+                  <div className="flex justify-between items-end">
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-black text-brand-gold uppercase tracking-[0.2em] mb-1">Total Payable</span>
+                      <span className="text-2xl sm:text-3xl font-black tracking-tighter text-slate-950 dark:text-white transition-colors duration-300">₹{total.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desktop / tablet checkout CTA — hidden on mobile, replaced by the fixed bottom bar */}
+                <button
+                  onClick={handleProceedToCheckout}
+                  className="hidden lg:flex group w-full bg-slate-950 dark:bg-white hover:bg-brand-gold dark:hover:bg-brand-gold py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] text-white dark:text-slate-900 dark:hover:text-white items-center justify-center gap-3 transition-all duration-300"
+                >
+                  Proceed to Payment <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+
+                <div className="mt-6 flex items-center gap-2 justify-center text-slate-300 dark:text-gray-600 transition-colors duration-300">
+                  <ShieldCheck size={12} />
+                  <span className="text-[8px] font-bold uppercase tracking-[0.3em]">Encrypted Checkout</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Fixed bottom checkout bar — mobile & tablet only, keeps the CTA within thumb reach */}
+      {cart.length > 0 && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-20 px-4 pb-4 pt-3 bg-white/80 dark:bg-black/80 backdrop-blur-2xl border-t border-white/80 dark:border-[#222] transition-colors duration-300">
+          <div className="max-w-6xl mx-auto flex items-center gap-4">
+            <div className="flex flex-col shrink-0">
+              <span className="text-[8px] font-black text-brand-gold uppercase tracking-[0.2em]">Total</span>
+              <span className="text-lg font-black tracking-tighter text-slate-950 dark:text-white transition-colors duration-300">₹{total.toLocaleString()}</span>
+            </div>
+            <button
+              onClick={handleProceedToCheckout}
+              className="group flex-1 bg-slate-950 dark:bg-white active:bg-brand-gold dark:active:bg-brand-gold py-4 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] text-white dark:text-slate-900 dark:active:text-white flex items-center justify-center gap-2 transition-all duration-300"
+            >
+              Checkout <ArrowRight size={13} className="group-active:translate-x-1 transition-transform" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CartItemRow({ item, updateQuantity, removeFromCart, toggleBagBox }: any) {
+  const isVideo = item.image && (
+    item.image.toLowerCase().endsWith('.mp4') ||
+    item.image.toLowerCase().endsWith('.webm') ||
+    item.image.toLowerCase().endsWith('.mov')
+  );
+
+  const isOutOfStock = item.stock <= 0;
+  const isExceedingStock = item.quantity > item.stock;
+
+  return (
+    <div className={`group relative flex items-center gap-3 sm:gap-4 p-3 bg-white/40 dark:bg-[#111]/40 backdrop-blur-xl border rounded-2xl sm:rounded-3xl transition-all duration-500 hover:shadow-xl hover:shadow-slate-200/40 dark:hover:shadow-black/50 ${isOutOfStock || isExceedingStock
+        ? "border-red-200 bg-red-50/20 dark:border-red-900/30 dark:bg-red-900/10"
+        : "border-white/60 dark:border-[#333]"
+      }`}>
+      <div className="relative w-20 h-20 sm:w-24 sm:h-24 overflow-hidden rounded-xl sm:rounded-2xl bg-slate-50 dark:bg-[#111] flex-shrink-0 transition-colors duration-300">
+        {isVideo ? (
+          <video
+            src={item.image}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+          />
+        ) : (
+          <Image
+            src={item.image}
+            alt={item.name}
+            fill
+            sizes="(max-width: 640px) 80px, 96px"
+            className="object-cover group-hover:scale-105 transition-transform duration-700"
+            unoptimized={true}
+          />
+        )}
+
+        {/* Out of Stock Overlay Text over Image */}
+        {isOutOfStock && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center p-1">
+            <span className="text-[8px] font-black tracking-tighter text-white uppercase text-center">Sold Out</span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0 pr-1 sm:pr-2">
+        <div className="flex justify-between items-start mb-2 gap-2">
+          <div className="min-w-0">
+            <h3 className="font-bold text-[12px] sm:text-[13px] text-slate-900 dark:text-white truncate uppercase tracking-tight transition-colors duration-300">{item.name}</h3>
+            {item.variationName && (
+              <p className="text-[9px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest mt-0.5 transition-colors duration-300">
+                {item.variationName}
+              </p>
+            )}
+            {/* Realtime Context Stock Indicators */}
+            {isOutOfStock ? (
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 transition-colors duration-300">
+                <AlertTriangle size={8} /> No Stock Left
+              </span>
+            ) : isExceedingStock ? (
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 transition-colors duration-300">
+                <AlertTriangle size={8} /> Exceeds available ({item.stock} left)
+              </span>
+            ) : null}
+
+            {/* Sale item indicator — coupons won't apply if this is in the cart */}
+            {item.isSaleItem && (
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider bg-brand-gold/10 text-brand-gold transition-colors duration-300">
+                Sale Item — Coupons Not Applicable
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => removeFromCart(item)}
+            aria-label="Remove item"
+            className="p-2 -mr-1 text-slate-300 hover:text-red-500 active:text-red-500 dark:text-gray-600 dark:hover:text-red-400 transition-colors shrink-0"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+
+        {/* Bag & Box add-on — only shown when this variation actually offers it */}
+        {item.carryBagBoxAvailable && (
+          <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={item.carryBagBox}
+              onChange={() => toggleBagBox(item)}
+              className="w-3.5 h-3.5 accent-brand-gold cursor-pointer"
+            />
+            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500 dark:text-gray-400">
+              Bag & Box
+            </span>
+            <span className="text-[9px] font-black text-brand-gold">
+              +₹{item.bagBoxPrice}
+            </span>
+          </label>
+        )}
+        <div className="flex items-center justify-between mt-3 sm:mt-4">
+          <div className="flex items-center bg-white/60 dark:bg-[#222]/60 border border-white dark:border-[#333] rounded-lg p-0.5 transition-colors duration-300">
+            <button
+              onClick={() => updateQuantity(item, item.quantity - 1)}
+              disabled={isOutOfStock}
+              aria-label="Decrease quantity"
+              className="w-8 h-8 sm:w-6 sm:h-6 flex items-center justify-center hover:bg-white dark:hover:bg-[#333] active:bg-white dark:active:bg-[#333] rounded-md transition-all disabled:opacity-20"
+            >
+              <Minus size={10} />
+            </button>
+            <span className="w-7 sm:w-8 text-center text-[11px] font-black">
+              {isOutOfStock ? 0 : item.quantity}
+            </span>
+            <button
+              onClick={() => updateQuantity(item, item.quantity + 1)}
+              disabled={isOutOfStock || item.quantity >= item.stock}
+              aria-label="Increase quantity"
+              className="w-8 h-8 sm:w-6 sm:h-6 flex items-center justify-center hover:bg-white dark:hover:bg-[#333] active:bg-white dark:active:bg-[#333] rounded-md transition-all disabled:opacity-20"
+            >
+              <Plus size={10} />
+            </button>
+          </div>
+          <div className="text-right">
+            {item.originalPrice > item.price && (
+              <span className="block text-[9px] font-bold text-slate-300 dark:text-gray-500 line-through transition-colors duration-300">₹{item.originalPrice.toLocaleString()}</span>
+            )}
+            <p className="font-black text-sm text-slate-950 dark:text-white transition-colors duration-300">
+              ₹{((item.price * (isOutOfStock ? 0 : item.quantity)) + (item.carryBagBox ? item.bagBoxPrice : 0)).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string, value: number }) {
+  return (
+    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-900 dark:text-white transition-colors duration-300">₹{value.toLocaleString()}</span>
+    </div>
+  );
+}
+
+function EmptyCart() {
+  return (
+    <div className="py-16 sm:py-20 flex flex-col items-center text-center">
+      <div className="w-20 h-20 bg-white/60 dark:bg-[#111]/60 backdrop-blur-xl rounded-3xl flex items-center justify-center mb-8 border border-white dark:border-[#333] shadow-sm transition-colors duration-300">
+        <ShoppingBag size={24} className="text-slate-200 dark:text-gray-600" />
+      </div>
+      <p className="text-slate-400 dark:text-gray-500 text-[10px] font-bold uppercase tracking-[0.3em] mb-6 transition-colors duration-300">Your bag is currently empty</p>
+      <Link href="/userinterface/Gproducts" className="group flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-950 dark:text-white hover:text-brand-gold dark:hover:text-brand-gold transition-colors duration-300">
+        Start Shopping <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
+      </Link>
+    </div>
+  );
+}

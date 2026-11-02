@@ -1,0 +1,17 @@
+# Never send secrets, customer data or build output into the image.
+.git
+node_modules
+.next
+.uploads
+.image-cache
+.env*
+deploy
+android
+capacitor-www
+envfile
+email and password
+release.keystore
+raw_base64.txt
+*.pem
+*.jks
+*.keystore
