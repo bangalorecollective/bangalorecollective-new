@@ -84,6 +84,7 @@ services:
       TOOLS_PASSWORD_HASH: ${TOOLS_PASSWORD_HASH:?set in .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./launcher.html:/srv/launcher/launcher.html:ro
       - ./uploads:/data/uploads:ro
       - caddy-data:/data/caddy
       - caddy-config:/config

@@ -55,7 +55,12 @@
 	}
 	encode zstd gzip
 
-	redir / /pgadmin/
+	# One home page with a button for each tool (deploy/launcher.html).
+	handle / {
+		root * /srv/launcher
+		rewrite * /launcher.html
+		file_server
+	}
 
 	handle /pgadmin* {
 		reverse_proxy pgadmin:80
