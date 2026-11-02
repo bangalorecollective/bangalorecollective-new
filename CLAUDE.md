@@ -19,7 +19,12 @@ privately on the owner's Mac at `~/bangalorecollective-backup-secrets/chat-2026-
 
 ## Everyday commands
 
-- Put code on the VPS: `./deploy/deploy.sh` (type-checks, copies, rebuilds; site down a few seconds).
+- Put code on the VPS: **push to `main`**. GitHub Actions (`.github/workflows/deploy.yml`) type-checks,
+  then triggers `deploy/deploy-from-github.sh` on the VPS, which pulls with a read-only deploy key,
+  builds, and restores the previous image if the new one does not start. After go-live this updates
+  the real shop. `./deploy/deploy.sh` still works for a manual deploy from the Mac.
+- The GitHub trigger key in `/root/.ssh/authorized_keys` is restricted to that script; keep it on
+  its own line (appending without a newline once glued it onto the previous key).
 - Database access rules check (on the VPS): `cd /opt/bangalorecollective && ./tests/check-access.sh`
 - Sign-in and upload checks: `deploy/tests/check-app.sh` (see the header for the variables).
 - Local run: open the SSH tunnel in `deploy/README.md`, then `npx next dev --webpack -p 3100`.
