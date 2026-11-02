@@ -67,6 +67,9 @@ tool's own sign-in. Credentials are in the owner's `SERVER-TOOLS-LOGIN.txt`, nev
 
 - `/pgadmin/` — pgAdmin 9.18, connected as `viewer`: reads every table, every session is read-only.
   Server entry from `/opt/bangalorecollective/pgadmin/servers.json`, password from `pgadmin/pgpass`.
+  A second entry, "Bangalore Collective (editor)", signs in as `editor` (`sql/050_editor_role.sql`):
+  reads and writes every row and can create tables in public, but cannot alter or drop existing
+  tables, drop the database or manage roles.
 - `/files/` — File Browser 2.63, the `uploads` folder mounted read-only; the `owner` user can view
   and download only.
 
