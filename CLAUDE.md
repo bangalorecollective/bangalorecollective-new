@@ -51,11 +51,17 @@ The owner wants to manage everything from a dashboard (settings form, database, 
 so the hand-built setup described in `deploy/README.md` is being replaced:
 
 1. Done: Hostinger snapshot taken 2026-11-02 21:27, **expires 2026-11-03** (undo only until then).
-2. Owner: VPS → OS & Panel → Operating System → Control panel → **Coolify**, keeping the
-   `migration` SSH key (`~/.ssh/bangalorecollective_vps`) so Claude can connect. This erases the VPS.
-3. Right after the install, **create the Coolify admin account immediately** (the first visitor to a
-   fresh Coolify becomes admin). The owner may ask Claude to do it: save the login in
-   `~/bangalorecollective-backup-secrets/` and hand it over with `pbcopy`.
+2. Done 2026-11-03: VPS reinstalled with Hostinger's **Coolify** template: Ubuntu 24.04.5, Coolify
+   containers healthy (coolify, coolify-db, coolify-redis, coolify-proxy, coolify-sentinel). The old
+   `/opt/bangalorecollective` setup is gone. The SSH host key changed (the Mac's known_hosts was updated).
+3. Done: the owner created the Coolify admin account (sign-up page now closed) and finished the
+   onboarding with **Localhost**. Their login is theirs; do not ask for it.
+   Claude's key (`~/.ssh/bangalorecollective_vps`) is in `/root/.ssh/authorized_keys` and works.
+   Hostinger's web console appends a temporary `expiry-time=...` key **without a trailing newline**,
+   so anything appended after it gets glued on: always add keys with a leading newline.
+   Still open on the server: UFW inactive; public ports 22, 80, 443, 8000 (dashboard), 8080, 6001,
+   6002; root password login enabled; a reboot is pending for updates. Put the dashboard on HTTPS
+   at its own domain, then close 8000/8080/6001/6002 (remember Docker-published ports bypass UFW).
 4. Rebuild inside Coolify, so everything shows in its dashboard: PostgreSQL 18 resource (restore
    `~/bangalorecollective-backup-secrets/db-2026-11-02/full.dump`, then `deploy/sql/010…050`);
    PostgREST v16.4 as an app; the website from the GitHub repo with env vars in Coolify's form;
