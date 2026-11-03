@@ -38,11 +38,36 @@ privately on the owner's Mac at `~/bangalorecollective-backup-secrets/chat-2026-
   `raw_base64.txt` exist on disk from the old project and are git-ignored; keep it that way.
 - Never print passwords or keys in the chat; hand them over with `pbcopy` or the secrets folder.
 - Do not edit `/opt/bangalorecollective/.env` passwords by hand: most also live in database roles.
-- Never pick a Hostinger "OS & Panel" template on this VPS: it reinstalls and erases the server.
+- A Hostinger "OS & Panel" template reinstalls and erases the server; only the owner clicks it.
+  Coolify's own install script does not wipe a server. Say which one is meant.
 - New tables are locked by default: add grants and policies, then `notify pgrst, 'reload schema'`.
 - Keep `tests/check-access.sh` passing after any change to access rules.
-- Future projects moved to a VPS: propose and use a control panel (Coolify/Dokploy for Node +
-  Postgres, CloudPanel for PHP) on an empty VPS before any setup. Not for this VPS.
+- VPS projects use a control panel (Coolify/Dokploy for Node + Postgres, CloudPanel for PHP),
+  chosen on an empty VPS before any setup, with pgAdmin and File Browser added from its services.
+
+## Current plan (decided 2–3 November 2026): rebuild this VPS on Coolify
+
+The owner wants to manage everything from a dashboard (settings form, database, files, deploys),
+so the hand-built setup described in `deploy/README.md` is being replaced:
+
+1. Done: Hostinger snapshot taken 2026-11-02 21:27, **expires 2026-11-03** (undo only until then).
+2. Owner: VPS → OS & Panel → Operating System → Control panel → **Coolify**, keeping the
+   `migration` SSH key (`~/.ssh/bangalorecollective_vps`) so Claude can connect. This erases the VPS.
+3. Right after the install, **create the Coolify admin account immediately** (the first visitor to a
+   fresh Coolify becomes admin). The owner may ask Claude to do it: save the login in
+   `~/bangalorecollective-backup-secrets/` and hand it over with `pbcopy`.
+4. Rebuild inside Coolify, so everything shows in its dashboard: PostgreSQL 18 resource (restore
+   `~/bangalorecollective-backup-secrets/db-2026-11-02/full.dump`, then `deploy/sql/010…050`);
+   PostgREST v16.4 as an app; the website from the GitHub repo with env vars in Coolify's form;
+   uploads as persistent storage (copy from `~/bangalorecollective-backup-secrets/files-2026-11-02/`,
+   re-run `sql/030_storage_links.sql`, then `warm-image-cache.mjs`); domains `staging.` and
+   `tools.` with HTTPS and page locks; pgAdmin and File Browser from Coolify services; Coolify's
+   GitHub deploy (then remove `.github/workflows/deploy.yml` and the `VPS_DEPLOY_KEY` secret);
+   scheduled database backups. The home page pre-renders from the database at build time; make it
+   render on request instead, since Coolify builds without database access.
+5. Re-run `tests/check-access.sh`, `tests/check-app.sh` and the 61-page browser check before
+   telling the owner it is ready. Until then the owner must not push to `main` (the old deploy
+   workflow would fail), and staging/tools are down. The live shop (Vercel + Supabase) is unaffected.
 
 ## The owner
 
@@ -50,7 +75,7 @@ Prefers short, plain-English answers with clear steps, tables over long paragrap
 asked before anything that affects the live site, DNS or payments. Decisions they make are final;
 do not re-argue them (for example the old repo stays public for now).
 
-## Still to do (as of 2 November 2026)
+## Still to do after the Coolify rebuild
 
 - Owner: test the staging site; create a Google Cloud OAuth client for backups; decide on the
   checkout-totals fix and the subadmin menu; choose a go-live day.
