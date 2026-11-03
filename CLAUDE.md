@@ -15,7 +15,7 @@ built it is saved privately on the owner's Mac at `~/bangalorecollective-backup-
 | Coolify dashboard | http://201.18.206.138:8000, project **Bangalore Collective**, environment `production` |
 | Coolify resources | `database` (PostgreSQL 18.6, container `kawcqgosgyvloyd70yg8heem`), `postgrest` (`tqlctupjywddrzo8kdjd1uly`), `website` (`cd8f33u9hk1oqet5kiubfban`), `owner-tools` service |
 | Server files | `/data/bangalorecollective/` (`uploads/`, `image-cache/`, `tools/`, `filebrowser/`, `ops.env`) |
-| Test site | https://staging.bangalorecollective.com (page lock + noindex) |
+| Test site | https://staging.bangalorecollective.com (noindex; page lock removed 2026-11-03 at the owner's request, Coolify "HTTP Basic Auth" on the `website` app turns it back on) |
 | Owner tools | https://tools.bangalorecollective.com (launcher, `/pgadmin/`, `/files/`; own page lock) |
 | Backups and logins (never in git) | `~/bangalorecollective-backup-secrets/` on the Mac (`coolify-rebuild.env` holds the Coolify-era passwords) |
 
@@ -39,8 +39,11 @@ built it is saved privately on the owner's Mac at `~/bangalorecollective-backup-
 - Never touch the live site, the live Supabase database, or the old repo unless the owner asks.
   Reading live Supabase is allowed only inside `BEGIN READ ONLY` (the pooler ignores PGOPTIONS).
 - Never commit or push without being asked. Never commit secrets, `.env*`, database dumps,
-  uploads or customer data. `envfile`, `email and password`, `release.keystore` and
-  `raw_base64.txt` exist on disk from the old project and are git-ignored; keep it that way.
+  uploads or customer data. The old project's `envfile` (live Supabase/Razorpay/Gmail keys),
+  `release.keystore` (Android signing key: never lose it) and `raw_base64.txt` were moved on
+  2026-11-03 to `~/bangalorecollective-backup-secrets/old-project-files/`. `email and password`
+  (owner's notes: logins plus website and tools links) lives in `private/owner-notes/` by the
+  owner's choice; `/private/` is git- and docker-ignored. All four names stay git-ignored too.
 - Never print passwords or keys in the chat; hand them over with `pbcopy` or the secrets folder.
   Send API bodies with secrets over stdin: a failed `curl --data` echoes its argument.
 - Database role passwords (`authenticator`, `app_server`, `viewer`, `editor`) also live in Coolify
@@ -63,10 +66,24 @@ built it is saved privately on the owner's Mac at `~/bangalorecollective-backup-
 | `postgrest`: private, no domain, fixed container name | done |
 | `owner-tools`: tools.bangalorecollective.com with HTTPS, same logins as before | done |
 | Access rules check on the new database | done, 41/41 |
-| `website`: GitHub App, domain, page lock, env vars, upload folders, auto-deploy | configured; first build waits for this push |
-| Uploads (25 GB) copied from the Mac backup to `/data/bangalorecollective/uploads` | in progress |
-| Then: `warm-image-cache.mjs`, `check-app.sh`, the 61-page browser check | to do |
-| Then: Coolify scheduled database backups | to do |
+| `website`: GitHub App, domain, page lock, env vars, upload folders, auto-deploy | done; push to `main` builds in ~70 s |
+| Uploads copied to `/data/bangalorecollective/uploads`, owned by 1001 | done, 3,686 files, checksums match the Mac backup |
+| `warm-image-cache.mjs` | done, 12,464 images, 0 failed |
+| `check-app.sh` (run on the VPS; from the Mac, dropped connections show as `000`) | done, 55/55 |
+| 61-page browser check (Playwright) | done; 3 flagged, all as on live: .mp4 "photos" on a category page, wishlist 406, missing `offers` table |
+| Coolify database backups | done, nightly 21:00 UTC (02:30 IST), 14 kept on the VPS only |
+| Full order on a phone-sized screen (bag → cart → checkout → proof → finalize), seen in admin | done; test order, customer and stock change undone afterwards |
+
+Gmail: the old app password stopped working (it was in the old public repo). A new one was made on
+2026-11-03 (`~/bangalorecollective-backup-secrets/GMAIL-APP-PASSWORD.txt`), tested from the VPS
+(SMTP 465 login and one email to the shop inbox), and set as `EMAIL_USER`/`EMAIL_PASS` on the
+`website` app. Staging stays `MAIL_MODE=log`, because it holds real customers; switch to `send`
+at go-live. The live site (Vercel) may still have the old password; only update it if asked. Checkout is bank
+transfer with a payment proof; nothing calls `/api/create-razorpay-order`, so no Razorpay keys are
+needed. The admin order page shows "GST 18%" that is not added to the total: original shop code.
+
+Staging is ready for the owner to test. Go-live is planned for 1–2 weeks out, only when the owner
+says so; Google Drive backups are on hold until the owner brings them up.
 
 Open on the server: UFW inactive; public ports 22, 80, 443, 8000 (dashboard), 8080, 6001, 6002; root
 password login enabled; a reboot is pending for updates. Put the dashboard on HTTPS at its own
@@ -87,14 +104,15 @@ terminal (Mac or server), and give paste-once commands.
 
 ## Still to do after the Coolify rebuild
 
-- Owner: test the staging site; create a Google Cloud OAuth client for backups; decide on the
-  checkout-totals fix and the subadmin menu; choose a go-live day.
+- Owner: test the staging site; create a Google Cloud OAuth client for backups; choose a go-live day.
+- Decided 2026-11-03: the site must behave exactly like live. The GST 18% line, browser-computed
+  checkout totals and the subadmin menu are the same on live, so they stay as they are.
 - Claude: daily encrypted backups to Google Drive (needs the OAuth client); VPS hardening
   (key-only SSH, firewall, automatic security updates, uptime alert); checkout totals on the server
   if approved; go-live script and real email (new Gmail app password, `MAIL_MODE=send`).
 - Go-live: pause orders, final copy of data and files from Supabase (re-run
-  `sql/030_storage_links.sql`), in Coolify switch the `website` domain to the real one, turn off its
-  page lock and remove `NOINDEX`, point `@` and `www` at the VPS, test the site and the Android app,
+  `sql/030_storage_links.sql`), in Coolify switch the `website` domain to the real one and remove
+  `NOINDEX` (then redeploy, it is read at build time), point `@` and `www` at the VPS, test the site and the Android app,
   keep Supabase and Vercel for a few weeks.
 - After go-live: change the Gmail app password and Razorpay secret (in the old public repo); fix the
   two products that have videos as photos; update `.github/workflows/android_build.yml`.

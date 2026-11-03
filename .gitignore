@@ -56,3 +56,6 @@ keystore.properties
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Owner notes with logins; never committed.
+/private/
