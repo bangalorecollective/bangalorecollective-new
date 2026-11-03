@@ -34,8 +34,10 @@ jobs:
           distribution: zulu
           java-version: "21"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # GitHub's Ubuntu runners ship the Android SDK (ANDROID_HOME); android-actions/setup-android
+      # failed there on licence prompts with cmdline-tools 16.
+      - name: Accept Android SDK licences
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Create Android Assets Directory
         run: mkdir -p android/app/src/main/assets
