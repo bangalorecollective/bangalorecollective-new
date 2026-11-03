@@ -1,0 +1,62 @@
+name: Build staging test APK
+
+# Manual: GitHub → Actions → "Build staging test APK" → Run workflow. Makes a debug APK named
+# "BC Staging" that opens https://staging.bangalorecollective.com, with its own app id, so it
+# installs next to the real app instead of replacing it. For testing only: never upload it to the
+# Play Store. Needs no secrets (debug builds use a throwaway signing key).
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Only in this build's copy of the code; the repo keeps the real app's settings.
+      - name: Point the app at staging
+        run: |
+          sed -i "s#url: 'https://www.bangalorecollective.com/'#url: 'https://staging.bangalorecollective.com/'#" capacitor.config.ts
+          sed -i 's#applicationId "com.banglorecolletive.app"#applicationId "com.banglorecolletive.app.staging"#' android/app/build.gradle
+          sed -i 's#<string name="app_name">[^<]*</string>#<string name="app_name">BC Staging</string>#; s#<string name="title_activity_main">[^<]*</string>#<string name="title_activity_main">BC Staging</string>#' android/app/src/main/res/values/strings.xml
+          grep -q "staging.bangalorecollective.com" capacitor.config.ts
+          grep -q 'app.staging"' android/app/build.gradle
+          grep -q ">BC Staging<" android/app/src/main/res/values/strings.xml
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create Android Assets Directory
+        run: mkdir -p android/app/src/main/assets
+
+      - name: Capacitor Sync
+        run: npx cap sync android
+
+      - name: Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: bc-staging-test-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
