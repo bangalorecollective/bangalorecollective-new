@@ -1,0 +1,6 @@
+{
+  "Servers": {
+    "1": {"Name": "Bangalore Collective (read-only)", "Group": "Servers", "Host": "kawcqgosgyvloyd70yg8heem", "Port": 5432, "MaintenanceDB": "bangalorecollective", "Username": "viewer", "SSLMode": "prefer"},
+    "2": {"Name": "Bangalore Collective (editor)", "Group": "Servers", "Host": "kawcqgosgyvloyd70yg8heem", "Port": 5432, "MaintenanceDB": "bangalorecollective", "Username": "editor", "SSLMode": "prefer"}
+  }
+}

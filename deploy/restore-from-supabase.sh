@@ -1,6 +1,7 @@
 #!/bin/bash
-# Loads a Supabase backup into the VPS database. Run on the VPS from /opt/bangalorecollective.
+# Loads a Supabase backup into the VPS database. Run on the VPS from the folder holding ./import.
 #
+# Container names and AUTHENTICATOR_PASSWORD come from /data/bangalorecollective/ops.env.
 # Expects in ./import (copied over SSH, never committed):
 #   full.dump          pg_dump -Fc of the Supabase database
 #   roles.sql          pg_dumpall --roles-only --no-role-passwords
@@ -10,9 +11,9 @@
 # so it can never overwrite data that is already there.
 set -euo pipefail
 cd "$(dirname "$0")"
-set -a; . ./.env; set +a
+set -a; . /data/bangalorecollective/ops.env; set +a
 
-PSQL=(docker compose exec -T db psql -U postgres -d bangalorecollective -v ON_ERROR_STOP=1 -q)
+PSQL=(docker exec -i "$DB_CONTAINER" psql -U postgres -d bangalorecollective -v ON_ERROR_STOP=1 -q)
 
 existing=$("${PSQL[@]}" -At -c "select count(*) from pg_tables where schemaname = 'public'")
 if [ "$existing" != "0" ]; then
@@ -21,11 +22,11 @@ if [ "$existing" != "0" ]; then
 fi
 
 echo "--roles"
-docker compose exec -T db psql -U postgres -d bangalorecollective -q -f /import/roles.sql > import/roles.log 2>&1 || true
+docker exec -i "$DB_CONTAINER" psql -U postgres -d bangalorecollective -q < import/roles.sql > import/roles.log 2>&1 || true
 echo "role statements refused (expected for Supabase-only roles): $(grep -c ERROR import/roles.log || true)"
 
 echo "--restore"
-docker compose exec -T db pg_restore -U postgres -d bangalorecollective /import/full.dump > import/restore.log 2>&1 || true
+docker exec -i "$DB_CONTAINER" pg_restore -U postgres -d bangalorecollective < import/full.dump > import/restore.log 2>&1 || true
 echo "restore errors: $(grep -c 'pg_restore: error' import/restore.log || true)"
 if grep -E 'ERROR:' import/restore.log | grep -vqE 'vault|supabase_vault'; then
   echo "unexpected restore errors:" >&2

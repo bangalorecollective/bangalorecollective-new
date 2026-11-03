@@ -1,5 +1,5 @@
-# Production image for the VPS (see deploy/README.md). Built on the VPS by deploy/build-app.sh,
-# which lets the build reach PostgREST because the home page is pre-rendered from the database.
+# Production image for the VPS (see deploy/README.md). Coolify builds it from GitHub without
+# database access, so no page may read the database during the build.
 
 FROM node:24-bookworm-slim AS deps
 WORKDIR /app
@@ -8,8 +8,8 @@ RUN npm ci --no-audit --no-fund
 
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
-ARG POSTGREST_URL
-ENV POSTGREST_URL=$POSTGREST_URL NEXT_TELEMETRY_DISABLED=1
+ARG NOINDEX
+ENV NOINDEX=$NOINDEX NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

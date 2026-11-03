@@ -1,0 +1,48 @@
+# Owner tools at tools.bangalorecollective.com: a launcher page, pgAdmin and File Browser behind
+# one page lock. Config files live on the VPS in /data/bangalorecollective/tools (the Caddyfile holds
+# the page-lock hash), File Browser's user database in /data/bangalorecollective/filebrowser.
+services:
+  tools:
+    image: caddy:2.11.6-alpine
+    restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_TOOLS_80
+    volumes:
+      - /data/bangalorecollective/tools/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /data/bangalorecollective/tools/launcher.html:/srv/launcher/launcher.html:ro
+    depends_on:
+      - pgadmin
+      - filebrowser
+
+  # Database viewer at /pgadmin. Asks for the viewer (read-only) or editor database password.
+  pgadmin:
+    image: dpage/pgadmin4:9.18
+    restart: unless-stopped
+    environment:
+      - SCRIPT_NAME=/pgadmin
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
+      - PGADMIN_DISABLE_POSTFIX=true
+      - PGADMIN_CONFIG_UPGRADE_CHECK_ENABLED=False
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - /data/bangalorecollective/tools/servers.json:/pgadmin4/servers.json:ro
+
+  # File viewer at /files. Uploads are mounted read-only; the owner user can view and download.
+  filebrowser:
+    image: filebrowser/filebrowser:v2.63.23
+    restart: unless-stopped
+    user: "1001:1001"
+    entrypoint: ["filebrowser"]
+    command: ["--database", "/database/filebrowser.db", "--root", "/srv", "--baseURL", "/files", "--address", "0.0.0.0", "--port", "8080"]
+    volumes:
+      - /data/bangalorecollective/uploads:/srv:ro
+      - /data/bangalorecollective/filebrowser:/database
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/files/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pgadmin-data:

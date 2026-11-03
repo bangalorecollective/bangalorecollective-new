@@ -1,12 +1,13 @@
 #!/bin/bash
 # Checks who can read and change what through PostgREST, as a visitor, a customer and an admin.
-# Run on the VPS from /opt/bangalorecollective. Every write uses "Prefer: tx=rollback", so
+# Run on the VPS (container names and JWT_SECRET come from /data/bangalorecollective/ops.env).
+# Every write uses "Prefer: tx=rollback", so
 # nothing is saved. Exits non-zero if any check does not match what is expected.
 set -uo pipefail
-cd "$(dirname "$0")/.."
-set -a; . ./.env; set +a
-B=${REST_URL:-http://127.0.0.1:3001}
-PSQL=(docker compose exec -T db psql -U postgres -d bangalorecollective -At)
+set -a; . /data/bangalorecollective/ops.env; set +a
+# PostgREST has no public port; reach it on its Docker network address.
+B=${REST_URL:-http://$(docker inspect -f '{{(index .NetworkSettings.Networks "coolify").IPAddress}}' "$REST_CONTAINER"):3000}
+PSQL=(docker exec -i "$DB_CONTAINER" psql -U postgres -d bangalorecollective -At)
 
 jwt() { # role, sub
   python3 - "$1" "$2" <<'PY'

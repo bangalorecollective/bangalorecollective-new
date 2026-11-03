@@ -2,7 +2,7 @@
 // a page with hundreds of photos (POS, restock, categories) does not wait for them to be made.
 // Runs inside the app container and asks the app itself, so it fills the same cache:
 //
-//   docker compose exec -T app node - < warm-image-cache.mjs
+//   . /data/bangalorecollective/ops.env; docker exec -i "$APP_CONTAINER" node - < warm-image-cache.mjs
 //
 // Safe to stop and run again: images already in the cache come back immediately.
 import { readdir } from "fs/promises";

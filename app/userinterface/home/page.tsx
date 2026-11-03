@@ -1,23 +1,15 @@
 import supabase from "@/lib/supabase";
+import { unstable_cache } from "next/cache";
 import HomeClient from "@/app/userinterface/home/HomeClient";
 
-// Share the homepage for five minutes to reduce regeneration and ISR writes.
-// Catalog and promotional changes can take up to five minutes to appear here.
-export const revalidate = 300;
+// Rendered on request, not at build time: Coolify builds the site without database access.
+export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  try {
-    const [
-      { data: attributesData },
-      { data: heroSections },
-      { data: siteInfo },
-      { data: categoriesData },
-      { data: subcategoriesData },
-      { data: brandsData },
-      { data: instagramData },
-      { data: productsData },
-      { data: lifestyleProductsData },
-    ] = await Promise.all([
+// The home page data is shared for five minutes, so catalog and promotional changes can take up
+// to five minutes to appear here. A failed query throws, so an empty page is never cached.
+const getHomeData = unstable_cache(
+  async () => {
+    const results = await Promise.all([
       supabase.from("attributes").select("id, type, name").eq("type", "lifestyle_tag"),
       supabase.from("hero_section").select("*").eq("active", true).order("created_at", { ascending: false }),
       supabase
@@ -50,6 +42,27 @@ export default async function HomePage() {
         .eq("active", true)
         .limit(40),
     ]);
+    const failed = results.find((r) => r.error);
+    if (failed) throw failed.error;
+    return results.map((r) => r.data);
+  },
+  ["home-page-data"],
+  { revalidate: 300 }
+);
+
+export default async function HomePage() {
+  try {
+    const [
+      attributesData,
+      heroSections,
+      siteInfo,
+      categoriesData,
+      subcategoriesData,
+      brandsData,
+      instagramData,
+      productsData,
+      lifestyleProductsData,
+    ]: any[] = await getHomeData();
 
     const tagsData = attributesData || [];
 

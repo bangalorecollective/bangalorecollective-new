@@ -1,0 +1,40 @@
+# Owner tools behind Coolify's proxy, which handles HTTPS for tools.bangalorecollective.com.
+# Its own page lock (kept after go-live), then each tool's own sign-in. Never indexed.
+{
+	auto_https off
+	admin off
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:80 {
+	# The VPS copy has the real user and the `caddy hash-password` output here.
+	basic_auth {
+		TOOLS_USER_HERE TOOLS_HASH_HERE
+	}
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		# pgAdmin needs the Referer header on its own requests; "no-referrer" leaves it blank.
+		Referrer-Policy same-origin
+		-Server
+	}
+	encode zstd gzip
+
+	handle / {
+		root * /srv/launcher
+		rewrite * /launcher.html
+		file_server
+	}
+	handle /pgadmin* {
+		reverse_proxy pgadmin:80
+	}
+	handle /files* {
+		reverse_proxy filebrowser:8080
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

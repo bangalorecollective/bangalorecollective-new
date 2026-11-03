@@ -70,6 +70,12 @@ const nextConfig: NextConfig = {
   // Pages still get the trailing slash (middleware.ts adds it); API routes and uploaded files
   // must not be redirected, or every data request and image would cost an extra round trip.
   skipTrailingSlashRedirect: true,
+  // Staging runs on a copy of real customer data and must not compete with the real shop in
+  // Google. Set NOINDEX=1 in Coolify for staging; read at build time, so redeploy after changing it.
+  async headers() {
+    if (process.env.NOINDEX !== "1") return [];
+    return [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }];
+  },
   async redirects() {
     return [
       {
