@@ -1,15 +1,7 @@
 import supabase from "@/lib/supabase";
 import { unstable_cache } from "next/cache";
 import ProductsClient from "./ProductsClient";
-
-const PRODUCTS_PER_PAGE = 60;
-
-// Trimmed: only the variation fields the UI actually reads (price + stock filter + size name).
-const FULL_SELECT = `
-  id, name, lifestyle_tag_id, category_id, subcategory_id, sub_subcategory_id, brand_id, created_at,
-  product_images(image_url),
-  product_variations!inner(id, price, stock, size_id, attributes:size_id(name))
-`;
+import { fetchGalleryPage } from "./galleryQuery";
 
 // Force fresh data per request since filters/pagination come from the URL.
 export const dynamic = "force-dynamic";
@@ -47,31 +39,23 @@ async function fetchProducts({
   lifestyleTagId: number | null;
   page: number;
 }) {
-  const from = (page - 1) * PRODUCTS_PER_PAGE;
-  const to = from + PRODUCTS_PER_PAGE - 1;
-
-  let productQuery = supabase
-    .from("products")
-    .select(FULL_SELECT, { count: "exact" })
-    .eq("active", true)
-    .gt("product_variations.stock", 0)
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  if (categoryId) productQuery = productQuery.eq("category_id", categoryId);
-  if (brandId) productQuery = productQuery.eq("brand_id", brandId);
-  if (lifestyleTagId) productQuery = productQuery.eq("lifestyle_tag_id", lifestyleTagId);
-
-  const { data, count } = await productQuery;
-
-  return {
-    products: (data || []).map((p: any) => ({
-      ...p,
-      price: p.product_variations?.[0]?.price || 0,
-      image: p.product_images?.[0]?.image_url,
-    })),
-    count: count || 0,
-  };
+  try {
+    return await fetchGalleryPage(
+      {
+        category_id: categoryId,
+        subcategory_id: null,
+        sub_subcategory_id: null,
+        brand_id: brandId,
+        lifestyle_tag_id: lifestyleTagId,
+        sort: "latest",
+        search: "",
+      },
+      page
+    );
+  } catch (err) {
+    console.error("Failed to load gallery products:", err);
+    return { products: [], count: 0 };
+  }
 }
 
 export default async function ProductsPage({

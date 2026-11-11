@@ -508,10 +508,12 @@ const BAG_BOX_PRICE = 500;
           `)
           .eq("category_id", prod.category_id)
           .neq("id", prod.id)
-          .limit(5)
+          .limit(20)
           .then(({ data: similarRaw }) => {
+            // In-stock products first, sold-out ones after; show 5.
+            const inStock = (p: any) => (p.product_variations?.some((v: any) => v.stock > 0) ? 1 : 0);
             setSimilarProducts(
-              similarRaw?.map((p: any) => {
+              [...(similarRaw || [])].sort((a: any, b: any) => inStock(b) - inStock(a)).slice(0, 5).map((p: any) => {
                 let fallbackImage = "/placeholder.png";
                 if (p.product_images?.[0]?.image_url) {
                   fallbackImage = p.product_images[0].image_url

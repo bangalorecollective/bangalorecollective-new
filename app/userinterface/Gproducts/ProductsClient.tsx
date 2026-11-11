@@ -8,13 +8,7 @@ import MobileFilterBar from "../components/products/MobileFilterBar";
 import MobileFilterDrawer from "../components/products/MobileFilterDrawer";
 import ProductGrid from "../components/products/ProductGrid";
 import PaginationControls from "../components/products/PaginationControls";
-
-const mapProducts = (rows: any[]) =>
-  rows.map((p) => ({
-    ...p,
-    price: p.product_variations?.[0]?.price || 0,
-    image: p.product_images?.[0]?.image_url,
-  }));
+import { fetchGalleryPage, PRODUCTS_PER_PAGE } from "./galleryQuery";
 
 interface ProductsClientProps {
   initialProducts: any[];
@@ -99,7 +93,7 @@ export default function ProductsClient({
     if (typeof window === "undefined") return initialPage;
     return parseSearch(window.location.search).page || initialPage;
   });
-  const productsPerPage = 60;
+  const productsPerPage = PRODUCTS_PER_PAGE;
 
   const [filters, setFiltersState] = useState<Filters>(() => {
     if (typeof window === "undefined") {
@@ -255,68 +249,14 @@ export default function ProductsClient({
     const fetchProducts = async () => {
       setProductsLoading(true);
 
-      const from = (currentPage - 1) * productsPerPage;
-      const to = from + productsPerPage - 1;
-
-      const fullSelect = `
-        id, name, lifestyle_tag_id, category_id, subcategory_id, sub_subcategory_id, brand_id, created_at,
-        product_images(image_url),
-        product_variations!inner(id, price, stock, size_id, attributes:size_id(name))
-      `;
-
-      const applyCommonFilters = (q: any) => {
-        let query = q.eq("active", true).gt("product_variations.stock", 0);
-        if (filters.category_id) query = query.eq("category_id", filters.category_id);
-        if (filters.subcategory_id) query = query.eq("subcategory_id", filters.subcategory_id);
-        if (filters.sub_subcategory_id) query = query.eq("sub_subcategory_id", filters.sub_subcategory_id);
-        if (filters.brand_id) query = query.eq("brand_id", filters.brand_id);
-        if (filters.lifestyle_tag_id) query = query.eq("lifestyle_tag_id", filters.lifestyle_tag_id);
-        if (debouncedSearch) query = query.ilike("name", `%${debouncedSearch}%`);
-        return query;
-      };
-
       try {
-        if (filters.sort === "price_asc" || filters.sort === "price_desc") {
-          const { data: priceRows, error: priceErr } = await applyCommonFilters(
-            supabase.from("products").select("id, product_variations!inner(price, stock)")
-          );
-          if (priceErr) throw priceErr;
-
-          const sorted = (priceRows || [])
-            .map((p: any) => ({ id: p.id, price: p.product_variations?.[0]?.price ?? 0 }))
-            .sort((a: any, b: any) => (filters.sort === "price_asc" ? a.price - b.price : b.price - a.price));
-
-          const pageIds = sorted.slice(from, to + 1).map((p: any) => p.id);
-
-          let fullRows: any[] = [];
-          if (pageIds.length > 0) {
-            const { data, error } = await applyCommonFilters(
-              supabase.from("products").select(fullSelect)
-            ).in("id", pageIds);
-            if (error) throw error;
-            fullRows = pageIds.map((id: any) => (data || []).find((r: any) => r.id === id)).filter(Boolean);
-          }
-
-          if (!cancelled) {
-            setTotalCount(sorted.length);
-            setProducts(mapProducts(fullRows));
-          }
-        } else {
-          let query = applyCommonFilters(
-            supabase.from("products").select(fullSelect, { count: "exact" })
-          ).range(from, to);
-
-          if (filters.sort === "alpha") query = query.order("name", { ascending: true });
-          else if (filters.sort === "oldest") query = query.order("created_at", { ascending: true });
-          else query = query.order("created_at", { ascending: false });
-
-          const { data, count, error } = await query;
-          if (error) throw error;
-
-          if (!cancelled) {
-            setTotalCount(count || 0);
-            setProducts(mapProducts(data || []));
-          }
+        const { products: rows, count } = await fetchGalleryPage(
+          { ...filters, search: debouncedSearch },
+          currentPage
+        );
+        if (!cancelled) {
+          setTotalCount(count);
+          setProducts(rows);
         }
       } catch (err) {
         console.error("Failed to load products:", err);

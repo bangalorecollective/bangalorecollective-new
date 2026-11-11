@@ -172,11 +172,14 @@ useEffect(() => {
             name, 
             product_images (
               image_url
+            ),
+            product_variations (
+              stock
             )
           `)
             .ilike("name", `%${cleanQuery}%`)
             .eq("active", true)   // 👈 only active products
-            .limit(5);
+            .limit(20);
 
           if (error) {
             console.error("Supabase Search Error:", error.message);
@@ -184,7 +187,9 @@ useEffect(() => {
           }
 
           if (data) {
-            const formattedResults = data.map((product: any) => ({
+            // In-stock matches first, sold-out ones after; show 5.
+            const inStock = (p: any) => (p.product_variations?.some((v: any) => v.stock > 0) ? 1 : 0);
+            const formattedResults = [...data].sort((a: any, b: any) => inStock(b) - inStock(a)).slice(0, 5).map((product: any) => ({
               id: product.id,
               name: product.name,
               image: product.product_images?.[0]?.image_url || "/placeholder.png",
