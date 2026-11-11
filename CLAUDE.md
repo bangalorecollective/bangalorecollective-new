@@ -31,6 +31,12 @@ built it is saved privately on the owner's Mac at `~/bangalorecollective-backup-
   `rsync -a deploy/ root@201.18.206.138:/root/deploy/`.
 - Database access rules check: `bash /root/deploy/tests/check-access.sh` (on the VPS).
 - Sign-in and upload checks: `deploy/tests/check-app.sh` (see the header for the variables).
+- Android: the app only opens https://www.bangalorecollective.com, so go-live needs no new build.
+  GitHub Actions has two manual workflows: "Build staging test APK" (debug, app id
+  `com.banglorecolletive.app.staging`, name "BC Staging", opens staging, no secrets) and "Build
+  Bangalore Collective AAB" (signed release; needs the 4 `ANDROID_*` secrets, which the owner adds
+  with `~/bangalorecollective-backup-secrets/set-android-secrets.sh`). Both use Node 24 and the
+  runner's own Android SDK.
 - The Coolify API token is in `~/bangalorecollective-backup-secrets/COOLIFY-API-TOKEN.txt`.
   Resetting the Coolify password deletes every API token.
 
@@ -114,5 +120,24 @@ terminal (Mac or server), and give paste-once commands.
   `sql/030_storage_links.sql`), in Coolify switch the `website` domain to the real one and remove
   `NOINDEX` (then redeploy, it is read at build time), point `@` and `www` at the VPS, test the site and the Android app,
   keep Supabase and Vercel for a few weeks.
+- **Went live 10 November 2026, ~16:05 IST.** Live copy taken 15:49 IST (66/66 tables, checks
+  41/41 and 55/55, 53 pages clean on www). The website app now serves www + bare domain (redirect to
+  www, Let's Encrypt), `MAIL_MODE=send`, `NOINDEX=0`. DNS: `@` and `www` A → 201.18.206.138. The
+  pre-go-live database is kept as `bangalorecollective_staging_20261110`; the `staging` DNS record
+  now leads nowhere (delete it or point a new app at it). Vercel + Supabase stay untouched as the
+  fallback for a few weeks (rollback: `@` A 216.198.79.1, `www` CNAME
+  04d3fd40643577d5.vercel-dns-017.com).
+- Go-live rehearsal, 6 November 2026 (stopped by the owner before the DNS change; staging settings
+  restored): staging now holds a live copy taken at 18:06 IST (66/66 tables, checks 41/41 and
+  55/55); the previous staging database is kept as `bangalorecollective_staging_20261106`. The
+  local old-repo folder is gone, so the live connection is in
+  `~/bangalorecollective-backup-secrets/SUPABASE-DB-URL.txt` (session pooler, read only). Every
+  bucket is public: new files download from their public URLs (`fetch-new-files.sh`), no keys.
+  `/root/import-1106/golive-db.sh` renames the current database and restores a fresh dump with
+  `sql/010…050` and the admin; it needs a new dump, `counts-before.tsv` and `SHA256SUMS` each time.
+  Coolify switch: domains `https://www.bangalorecollective.com,https://bangalorecollective.com`,
+  redirect `www`, `SITE_URL` real domain, `MAIL_MODE=send`, `NOINDEX=0`, redeploy. DNS (Hostinger,
+  TTL 1200): `@` A 216.198.79.1 → VPS, delete the `www` CNAME to Vercel and add `www` A → VPS.
+  An empty test folder `uploads/payment-proofs/7c3b686b-…` is left to delete by hand.
 - After go-live: change the Gmail app password and Razorpay secret (in the old public repo); fix the
   two products that have videos as photos; update `.github/workflows/android_build.yml`.

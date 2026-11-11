@@ -21,6 +21,36 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const supabase = createClient();
 
+// Grid tile for a video without a thumbnail. The <video> (which downloads part of the file to
+// show its first frame) is only created once the tile is near the screen: creating one for
+// every video at once froze phones.
+function LazyVideoTile({ src, className }: { src: string; className: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setNear(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="absolute inset-0">
+      {near && <video src={`${src}#t=0.1`} className={className} preload="metadata" muted playsInline />}
+    </div>
+  );
+}
+
 export default function VideoPage() {
   const [videos, setVideos] = useState<any[]>([]);
   const [siteInfo, setSiteInfo] = useState<any>(null);
@@ -415,15 +445,13 @@ export default function VideoPage() {
                   src={video.thumbnail_url} 
                   className="absolute inset-0 w-full h-full object-cover block z-10" 
                   alt="Video thumbnail"
-                  decoding="async" 
+                  loading="lazy"
+                  decoding="async"
                 />
               ) : (
-                <video 
-                  src={`${video.video_url}#t=0.1`} 
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10" 
-                  preload="metadata" 
-                  muted 
-                  playsInline 
+                <LazyVideoTile
+                  src={video.video_url}
+                  className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10"
                 />
               )}
 
@@ -488,12 +516,9 @@ export default function VideoPage() {
                       fetchPriority={index < 4 ? "high" : "auto"}
                     />
                   ) : (
-                    <video
-                      src={`${video.video_url}#t=0.1`}
+                    <LazyVideoTile
+                      src={video.video_url}
                       className="absolute inset-0 w-full h-full object-cover z-10 bg-slate-100 dark:bg-[#111] transition-colors duration-300"
-                      muted
-                      playsInline
-                      preload="metadata"
                     />
                   )
                 ) : (

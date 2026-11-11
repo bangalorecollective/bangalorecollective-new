@@ -218,13 +218,14 @@ function ProductCard({
 
       {/* Meta Text details panel layout */}
       <div className="pt-4 flex flex-col flex-1">
-        <div className="flex justify-between items-start mb-1">
-          <h3 className="text-sm font-black text-brand-blue dark:text-white uppercase truncate max-w-[70%] transition-colors duration-300">
+        {/* Phones: price under the name, so the name gets the full card width. */}
+        <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:gap-2 mb-1">
+          <h3 className="text-sm font-black text-brand-blue dark:text-white uppercase truncate max-w-full sm:max-w-[70%] transition-colors duration-300">
             {product.name}
           </h3>
 
           <span
-            className={`text-sm font-black ${
+            className={`shrink-0 text-sm font-black ${
               isCurrentVarOutOfStock
                 ? "text-red-400 line-through decoration-red-500"
                 : "text-brand-blue dark:text-white transition-colors duration-300"
@@ -273,13 +274,14 @@ function ProductCard({
           )}
         </div>
 
-        {/* FOOTER: Details + Action Buttons */}
+        {/* FOOTER: Details + Action Buttons. Phones have no room for both (the bag spilled out of
+            the card), so there the label is hidden and the buttons spread across the card. */}
         <div className="mt-auto border-t dark:border-[#222] pt-3 flex justify-between items-center transition-colors duration-300">
-          <span className="text-[10px] font-black uppercase text-slate-400 dark:text-gray-500 flex items-center gap-1 transition-colors duration-300">
+          <span className="hidden sm:flex text-[10px] font-black uppercase text-slate-400 dark:text-gray-500 items-center gap-1 transition-colors duration-300">
             <Eye size={12} /> Details
           </span>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-between w-full sm:w-auto sm:justify-start sm:gap-1">
             <ShareButton
               url={shareUrl}
               title={product?.name}
