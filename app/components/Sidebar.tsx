@@ -7,7 +7,7 @@ import {
   ShoppingCart, ClipboardList, ListTree, Package, Mail,
   Megaphone, FileText, Users, Shield, Lock, Info,
   LogOut, ChevronRight, LayoutDashboard, QrCode,
-  CreditCard, CheckCircle, Sparkles, Ticket
+  CreditCard, CheckCircle, Sparkles, Ticket, UserCog
 } from "lucide-react";
 
 interface SidebarProps {
@@ -97,6 +97,7 @@ export default function Sidebar({ role }: SidebarProps) {
     { label: "Website Info", href: "/site-info", icon: <Info size={16} /> },
     { label: "Videos", href: "/videos", icon: <Users size={16} /> },
     { label: "Admin Creations", href: "/createsub", icon: <Lock size={16} /> },
+    { label: "Admin Account", href: "/admin-account", icon: <UserCog size={16} /> },
     { label: "Messages enqiry", href: "/messages", icon: <Mail size={16} /> },
     { label: "User", href: "/customer", icon: <Users size={16} /> },
   ];
