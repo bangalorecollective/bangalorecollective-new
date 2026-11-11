@@ -6,6 +6,8 @@ interface ShopProductGridProps {
   hasAnyProducts: boolean;
   userId: string | null;
   returnUrl: string;
+  // Size chosen in the filter bar, or undefined for all sizes.
+  preferredSize?: string;
 }
 
 export default function ShopProductGrid({
@@ -13,12 +15,20 @@ export default function ShopProductGrid({
   hasAnyProducts,
   userId,
   returnUrl,
+  preferredSize,
 }: ShopProductGridProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 md:gap-x-8 gap-y-12 mb-16">
       {currentProducts.length > 0 ? (
         currentProducts.map((product) => (
-          <ProductCard key={product.id} product={product} userId={userId} returnUrl={returnUrl} />
+          // The key includes the size so cards reselect it when the size filter changes.
+          <ProductCard
+            key={`${product.id}-${preferredSize ?? ""}`}
+            product={product}
+            userId={userId}
+            returnUrl={returnUrl}
+            preferredSize={preferredSize}
+          />
         ))
       ) : (
         <div className="col-span-full py-48 text-center border-2 border-dashed border-white dark:border-[#333] bg-white/30 dark:bg-[#111]/30 backdrop-blur-xl rounded-[4rem] transition-colors duration-300">

@@ -214,18 +214,27 @@ function UnifiedShopContent({ params }: PageProps) {
   }, [products]);
 
   const filteredAndSortedProducts = useMemo(() => {
+    // In stock = some variation in stock (of the chosen size, when a size is filtered).
+    // Out-of-stock products stay listed, after all the in-stock ones.
+    const inStock = (product: any) =>
+      product.product_variations?.some(
+        (v: any) => v.stock > 0 && (selectedVariation === "all" || v.attributes?.name === selectedVariation)
+      )
+        ? 1
+        : 0;
+
     return products
       .filter((product) => {
         const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesBrand = selectedBrand === "all" || String(product.brand_id) === selectedBrand;
         const matchesVariation =
           selectedVariation === "all" ||
-          product.product_variations?.some(
-            (v: any) => v.attributes?.name === selectedVariation && v.stock > 0
-          );
+          product.product_variations?.some((v: any) => v.attributes?.name === selectedVariation);
         return matchesSearch && matchesBrand && matchesVariation;
       })
       .sort((a, b) => {
+        const stockOrder = inStock(b) - inStock(a);
+        if (stockOrder !== 0) return stockOrder;
         if (sortOrder === "lowToHigh") return a.sortingPrice - b.sortingPrice;
         if (sortOrder === "highToLow") return b.sortingPrice - a.sortingPrice;
         if (sortOrder === "newest") {
@@ -290,6 +299,7 @@ function UnifiedShopContent({ params }: PageProps) {
           hasAnyProducts={products.length > 0}
           userId={userId}
           returnUrl={returnUrl}
+          preferredSize={selectedVariation !== "all" ? selectedVariation : undefined}
         />
 
         <ShopPagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />

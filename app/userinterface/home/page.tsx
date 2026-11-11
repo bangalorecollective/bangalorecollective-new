@@ -40,6 +40,7 @@ const getHomeData = unstable_cache(
         .select(`*, product_variations(*, attributes:size_id(name)), product_images(image_url)`)
         .not("lifestyle_tag_id", "is", null)
         .eq("active", true)
+        .order("created_at", { ascending: false })
         .limit(40),
     ]);
     const failed = results.find((r) => r.error);
@@ -79,11 +80,12 @@ export default async function HomePage() {
         ),
       }));
 
-    // --- Lifestyle sections ---
+    // --- Lifestyle sections: newest in-stock products, 4 per tag ---
     const lifestyleSections = tagsData
       .map((tag: any) => {
         const products = (lifestyleProductsData || [])
           .filter((p: any) => p.lifestyle_tag_id === tag.id)
+          .filter((p: any) => p.product_variations?.some((v: any) => v.stock > 0))
           .slice(0, 4)
           .map((p: any) => ({
             ...p,

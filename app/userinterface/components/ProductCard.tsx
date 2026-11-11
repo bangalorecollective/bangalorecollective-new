@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef, memo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, memo } from "react";
 import OptimizedImage from "./OptimizedImage";
 import { Eye, ShoppingBag, Heart } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
@@ -16,6 +16,8 @@ interface ProductCardProps {
   // ── Bulk-fetched once by the parent instead of per-card queries ──
   isWishlistedInitial?: boolean;
   isInCartInitial?: boolean;
+  // Size picked in the page's size filter: that variation starts selected.
+  preferredSize?: string;
 }
 
 function ProductCard({
@@ -25,6 +27,7 @@ function ProductCard({
   returnUrl,
   isWishlistedInitial = false,
   isInCartInitial = false,
+  preferredSize,
 }: ProductCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -35,7 +38,26 @@ function ProductCard({
   const [isWishlisted, setIsWishlisted] = useState(isWishlistedInitial);
   const [isInCart, setIsInCart] = useState(isInCartInitial);
   const [loading, setLoading] = useState(false);
-  const [selectedVar, setSelectedVar] = useState<any>(product.product_variations?.[0] || null);
+  // Start on the filtered size if there is one, otherwise on the first size in stock.
+  const [selectedVar, setSelectedVar] = useState<any>(() => {
+    const variations = product.product_variations || [];
+    const ofSize = preferredSize ? variations.filter((v: any) => v.attributes?.name === preferredSize) : [];
+    return (
+      ofSize.find((v: any) => v.stock > 0) ||
+      ofSize[0] ||
+      variations.find((v: any) => v.stock > 0) ||
+      variations[0] ||
+      null
+    );
+  });
+
+  // Scroll the size chips so the filtered size is in view.
+  useEffect(() => {
+    if (!preferredSize) return;
+    const box = scrollContainerRef.current;
+    const chip = box?.querySelector<HTMLElement>('[data-selected="true"]');
+    if (box && chip) box.scrollLeft += chip.getBoundingClientRect().left - box.getBoundingClientRect().left - 8;
+  }, [preferredSize]);
 
   const cleanProductImage = useMemo(() => {
     let rawImageString = product?.image || product?.product_images?.[0]?.image_url;
@@ -250,6 +272,7 @@ function ProductCard({
             variationsWithLabels.map((v: any) => (
               <button
                 key={v.id}
+                data-selected={selectedVar?.id === v.id}
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedVar(v);
@@ -321,7 +344,8 @@ function areEqual(prev: ProductCardProps, next: ProductCardProps) {
     prev.priority === next.priority &&
     prev.returnUrl === next.returnUrl &&
     prev.isWishlistedInitial === next.isWishlistedInitial &&
-    prev.isInCartInitial === next.isInCartInitial
+    prev.isInCartInitial === next.isInCartInitial &&
+    prev.preferredSize === next.preferredSize
   );
 }
 
