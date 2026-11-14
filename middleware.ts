@@ -44,8 +44,11 @@ export async function middleware(request: NextRequest) {
 }
 
 // 4. Matcher rules (Skipping static assets cleanly)
+//    Uploads skip the middleware too: with a middleware in the way, Next.js keeps only the first
+//    10MB of a request body, which cut off larger photos and videos. The upload route checks the
+//    sign-in and its own size limits (lib/server/storage.ts).
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|css|js|map|woff|woff2|ttf|otf|mp4|webm|mp3|wav|pdf)$).*)',
+    '/((?!api/storage/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|css|js|map|woff|woff2|ttf|otf|mp4|webm|mp3|wav|pdf)$).*)',
   ],
 };
