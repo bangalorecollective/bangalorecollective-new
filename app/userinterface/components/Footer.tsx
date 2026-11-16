@@ -247,8 +247,8 @@ export default function Footer() {
                 <Mail size={16} className="mt-0.5 text-neutral-900 dark:text-white flex-shrink-0" />
                 <div className="flex flex-col">
                   <span className="text-[10px] uppercase tracking-wider font-bold text-neutral-400 dark:text-gray-500">Email Us</span>
-                  <a href="mailto:bangalorecollective15@gmail.com" className="hover:text-neutral-900 dark:hover:text-white transition-colors break-all">
-                    bangalorecollective15@gmail.com
+                  <a href="mailto:support@bangalorecollective.com" className="hover:text-neutral-900 dark:hover:text-white transition-colors break-all">
+                    support@bangalorecollective.com
                   </a>
                 </div>
               </div>

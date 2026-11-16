@@ -163,7 +163,7 @@ export default function AboutUsPage() {
 
               <div className="space-y-4">
                 <ContactInfoIcon icon={<MapPin size={18} />} label="Visit Us" value="Jayanagar, Bengaluru, 560070" color="bg-brand-gold/10 text-brand-gold" />
-                <ContactInfoIcon icon={<Mail size={18} />} label="Email" value="bangalorecollective15@gmail.com" color="bg-brand-blue/10 text-brand-blue dark:text-blue-400" />
+                <ContactInfoIcon icon={<Mail size={18} />} label="Email" value="support@bangalorecollective.com" color="bg-brand-blue/10 text-brand-blue dark:text-blue-400" />
                 <ContactInfoIcon icon={<Phone size={18} />} label="Call" value="+91 90608 89995" color="bg-slate-100 dark:bg-[#222] text-slate-600 dark:text-gray-300" />
               </div>
             </div>

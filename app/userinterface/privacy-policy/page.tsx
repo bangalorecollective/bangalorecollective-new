@@ -134,7 +134,7 @@ export default function PrivacyPolicy() {
 
             <footer className="pt-12 border-t border-slate-100 dark:border-[#333] transition-colors duration-300">
               <p className="text-xs text-slate-400 dark:text-gray-500 italic transition-colors duration-300">
-                For questions regarding this policy, please reach out to our concierge at <a href="mailto:bangalorecollective15@gmail.com" className="text-[#c4a174] hover:text-[#b08d60] underline transition-colors duration-300">bangalorecollective15@gmail.com</a>.
+                For questions regarding this policy, please reach out to our concierge at <a href="mailto:support@bangalorecollective.com" className="text-[#c4a174] hover:text-[#b08d60] underline transition-colors duration-300">support@bangalorecollective.com</a>.
               </p>
             </footer>
 
